@@ -47,6 +47,8 @@ tar -xzf truco-con-la-cara-linux-x86_64.tar.gz
 ./truco-con-la-cara/truco-con-la-cara
 ```
 
+En Linux hace falta `libEGL`, que en cualquier escritorio ya viene instalada (si no: `sudo apt install libegl1` o `sudo dnf install libglvnd-egl`).
+
 La primera vez tarda unos segundos en abrir. Si algo no anda, correlo con `--diagnostico`: revisa la cámara, el modelo y las fuentes sin abrir el juego. Si tenés más de una cámara, elegí otra con `--camara 1`.
 
 ## Correrlo desde el código

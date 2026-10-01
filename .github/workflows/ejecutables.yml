@@ -19,9 +19,9 @@ jobs:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -30,6 +30,12 @@ jobs:
 
       - name: Armar el ejecutable
         run: python build.py
+
+      # MediaPipe usa libEGL, que en cualquier Linux de escritorio ya está instalada
+      # pero no en la máquina de GitHub (no tiene pantalla).
+      - name: Instalar bibliotecas gráficas para la prueba
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgles2 libgl1
 
       - name: Probar el ejecutable
         shell: bash
@@ -40,7 +46,7 @@ jobs:
             dist/truco-con-la-cara/truco-con-la-cara --diagnostico
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: paquete-${{ matrix.os }}
           path: |
@@ -53,7 +59,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: paquetes
           merge-multiple: true
