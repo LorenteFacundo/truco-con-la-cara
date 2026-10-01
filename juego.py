@@ -13,7 +13,10 @@ La primera vez el juego aprende tus gestos (calibración, ~1 minuto). Gestos por
   Inflar los cachetes    Me voy al mazo
   Cerrar los ojos        menú de pausa (girar la cabeza para moverte, cejas para elegir)
 
-Teclado de respaldo: ← → / a d, espacio, t, e, r, f, s (quiero), n (no quiero), m (mazo),
+Se puede usar entero sin manos: la calibración empieza abriendo la boca bien grande, y
+todo lo demás (probar, regrabar, ajustes, salir) se maneja desde el menú con la cara.
+
+Teclado opcional: ← → / a d, espacio, t, e, r, f, s (quiero), n (no quiero), m (mazo),
 Esc / p (pausa), q salir.
 Uso: .venv/bin/python juego.py
 """
@@ -363,7 +366,7 @@ def dibujar_calibracion(cal, cam, lectura, ahora):
         escribir(img, (cx, 22), titulo, font=fuente(36, True), fill=DORADO, anchor="mt")
         for i, linea in enumerate(lineas):
             escribir(img, (cx, 80 + i * 24), linea, font=fuente(18), fill=(225, 225, 230), anchor="mt")
-        pie = "Espacio: empezar   ·   S: saltar   ·   Q: salir"
+        pie = "Con teclado: espacio empieza   ·   S saltea   ·   Q sale"
     else:
         _, instruccion, _ = cal.paso
         escribir(img, (cx, 18), f"Paso {cal.i + 1} de {len(cal.pasos)}", font=fuente(16), fill=(160, 160, 170),
@@ -383,16 +386,24 @@ def dibujar_calibracion(cal, cam, lectura, ahora):
         d.rectangle((camx, camy + camh // 2 - 30, camx + camw, camy + camh // 2 + 30), fill=(150, 30, 30, 200))
         escribir(img, (cx, camy + camh // 2), "No veo tu cara: acercate o poné más luz", font=fuente(22, True),
                  fill=(255, 255, 255), anchor="mm")
-    if cal.fase != "intro":
+    if cal.fase == "intro":
+        # Arranque sin manos: abrir la boca bien grande hasta llenar la barra.
+        d.rectangle((camx, camy + camh - 56, camx + camw, camy + camh), fill=(0, 0, 0, 170))
+        escribir(img, (cx, camy + camh - 28), "Para empezar: abrí la boca bien grande", font=fuente(24, True),
+                 fill=DORADO, anchor="mm")
+        p, color = cal.progreso_inicio, DORADO
+    else:
         p = cal.progreso(ahora)
         color = (230, 70, 70) if cal.fase == "grabar" else DORADO
-        d.rounded_rectangle((camx, camy + camh + 10, camx + camw, camy + camh + 24), 7, fill=(55, 58, 66))
+    d.rounded_rectangle((camx, camy + camh + 10, camx + camw, camy + camh + 24), 7, fill=(55, 58, 66))
+    if p > 0:
         d.rounded_rectangle((camx, camy + camh + 10, camx + max(14, int(camw * p)), camy + camh + 24), 7, fill=color)
     escribir(img, (cx, H - 22), pie, font=fuente(16), fill=(170, 170, 180), anchor="mm")
     return img
 
 
-def dibujar_prueba(clf, control, puntajes, cam, flash, sel, ahora):
+def dibujar_prueba(clf, control, puntajes, cam, flash, salir, ahora):
+    """Prueba en vivo de los gestos. `salir` (0..1): cuánto lleva con los ojos cerrados para volver."""
     img = Image.new("RGB", (W, H), FONDO_OSCURO)
     d = ImageDraw.Draw(img, "RGBA")
     escribir(img, (40, 22), "Probá tus gestos", font=fuente(32, True), fill=DORADO)
@@ -400,7 +411,7 @@ def dibujar_prueba(clf, control, puntajes, cam, flash, sel, ahora):
         sub = (f"Cada gesto se pone verde cuando lo mantenés {control.espera:.1f} s. "
                "Girá la cabeza para ver las flechas.")
     else:
-        sub = "Sin calibrar: detección automática. Apretá C para calibrar (recomendado)."
+        sub = "Sin calibrar: detección automática. Calibrá desde la pausa, en «Tus gestos» (recomendado)."
     escribir(img, (40, 72), sub, font=fuente(16), fill=(200, 200, 210))
 
     camx, camy = 40, 116
@@ -416,16 +427,13 @@ def dibujar_prueba(clf, control, puntajes, cam, flash, sel, ahora):
         d.rounded_rectangle((x, y, W - 40, y + 40), 9, fill=(40, 120, 65) if disparado else (40, 44, 52))
         if control.gesto == g and not disparado:
             d.rounded_rectangle((x, y, x + int((W - 40 - x) * control.progreso), y + 40), 9, fill=(110, 95, 35))
-        if n == sel:
-            d.rounded_rectangle((x - 2, y - 2, W - 38, y + 42), 10, outline=DORADO, width=2)
         escribir(img, (x + 14, y + 3), NOMBRE_GESTO[g], font=fuente(17, True), fill=(255, 255, 255))
         p = puntajes.get(g, 0.0)
         d.rounded_rectangle((x + 14, y + 29, x + 194, y + 34), 2, fill=(65, 68, 78))
         if p > 0.02:
             d.rounded_rectangle((x + 14, y + 29, x + 14 + int(180 * p), y + 34), 2, fill=DORADO)
         if g in clf.faltantes:
-            escribir(img, (W - 54, y + 20), "sin grabar: elegilo y apretá R", font=fuente(14, True),
-                     fill=(240, 170, 70), anchor="rm")
+            escribir(img, (W - 54, y + 20), "sin grabar", font=fuente(14, True), fill=(240, 170, 70), anchor="rm")
         elif clf.calibrado and g in clf.calidad:
             acierto, confusion = clf.calidad[g]
             color = (110, 210, 130) if acierto >= 0.85 else (240, 170, 70) if acierto >= 0.6 else (240, 90, 90)
@@ -444,16 +452,20 @@ def dibujar_prueba(clf, control, puntajes, cam, flash, sel, ahora):
         escribir(img, (x, y + 4), txt, font=fuente(15, True), fill=color)
     escribir(img, (x, y + 30), "Los % dicen qué tan bien distingo cada gesto.", font=fuente(14), fill=(160, 160, 170))
 
-    pie = "Espacio: volver al juego   ·   flechas: elegir gesto   ·   R: regrabarlo   ·   C: calibrar todo   ·   Q: salir"
-    escribir(img, (W // 2, H - 22), pie, font=fuente(16, True), fill=(220, 220, 230), anchor="mm")
+    # Volver sin manos: cerrar los ojos un rato largo (más que un gesto normal, que acá también se prueba).
+    d.rounded_rectangle((W // 2 - 300, H - 46, W // 2 + 300, H - 12), 10, fill=(40, 44, 52))
+    if salir > 0:
+        d.rounded_rectangle((W // 2 - 300, H - 46, W // 2 - 300 + int(600 * salir), H - 12), 10, fill=(110, 95, 35))
+    escribir(img, (W // 2, H - 29), f"Para volver: {NOMBRE_GESTO[GESTO_PAUSA].lower()} {SALIR_PRUEBA:.0f} segundos  (o Esc)",
+             font=fuente(17, True), fill=(230, 230, 235), anchor="mm")
     return img
 
+
+SALIR_PRUEBA = 2.0   # segundos con los ojos cerrados para salir de la prueba en vivo
 
 # Códigos de las flechas: Linux (GTK/Qt) y Windows.
 IZQ = (65361, 81, 2424832, ord("a"))
 DER = (65363, 83, 2555904, ord("d"))
-ARRIBA = (65362, 82, 2490368)
-ABAJO = (65364, 84, 2621440)
 
 
 def diagnostico(camara):
@@ -503,9 +515,13 @@ def main():
     cv2.namedWindow(ventana, cv2.WINDOW_AUTOSIZE)
 
     cal = menu = flash = None
-    sel = 0
+    ojos_desde = ojos_visto = None   # para salir de la prueba en vivo con los ojos cerrados
     t_pausa = None
     mostrada = False
+
+    def menu_de(inicio="pausa"):
+        return Menu(ajustes, lambda: clf, inicio)
+
     if lector.ok and not clf.calibrado:
         modo, cal = "calibrar", Calibracion()
     elif lector.ok and clf.faltantes:
@@ -532,35 +548,34 @@ def main():
             anterior = modo
 
             if modo == "calibrar":
-                if tecla == 27:
-                    modo = "prueba"
+                # Empieza sola al abrir la boca bien grande (ver Calibracion); el teclado es opcional.
+                if tecla == 27 or (cal.fase == "intro" and letra == "s"):
+                    if clf.calibrado:
+                        modo, menu = "menu", menu_de("gestos")
+                    else:
+                        modo = "juego"
                 elif cal.fase == "intro" and letra == " ":
                     cal.empezar()
-                elif cal.fase == "intro" and letra == "s":
-                    modo = "prueba"
                 cal.actualizar(lectura, ahora)
                 if cal.terminada:
                     datos = cal.resultado(clf.datos if clf.calibrado else None)
                     guardar_calibracion(datos)
                     clf = Calibrado(datos)
-                    modo = "prueba"
+                    modo, menu = "menu", menu_de("calibracion")
                 imagen = dibujar_calibracion(cal, cam, lectura, ahora)
 
             elif modo == "prueba":
                 for ev in control.actualizar(gesto, giro, ahora):
                     flash = (ev, ahora)
-                if letra in (" ", "\r") or tecla == 27:
-                    modo = "juego"
-                elif tecla in ARRIBA:
-                    sel = (sel - 1) % len(GESTOS)
-                elif tecla in ABAJO:
-                    sel = (sel + 1) % len(GESTOS)
-                elif letra == "c" and lector.ok:
-                    modo, cal = "calibrar", Calibracion()
-                elif letra == "r" and lector.ok:
-                    solo = [GESTOS[sel]] if clf.calibrado else None
-                    modo, cal = "calibrar", Calibracion(solo=solo, intro=solo is None)
-                imagen = dibujar_prueba(clf, control, puntajes, cam, flash, sel, ahora)
+                if gesto == GESTO_PAUSA:
+                    ojos_desde, ojos_visto = ojos_desde or ahora, ahora
+                elif ojos_desde and ahora - ojos_visto > 0.3:
+                    ojos_desde = None
+                salir = min(1.0, (ahora - ojos_desde) / SALIR_PRUEBA) if ojos_desde else 0.0
+                if salir >= 1.0 or tecla == 27 or letra in (" ", "\r"):
+                    modo, menu = "menu", menu_de("gestos")
+                    sonar("bell")
+                imagen = dibujar_prueba(clf, control, puntajes, cam, flash, salir, ahora)
 
             elif modo == "menu":
                 for ev in control.actualizar(gesto, giro, ahora):
@@ -578,12 +593,22 @@ def main():
                     menu.evento("elegir")
                 elif tecla == 27 or letra == "p":
                     menu.evento("volver")
-                if menu.salida == "salir":
+
+                salida = menu.salida
+                if salida in ("calibrar", "regrabar") and not lector.ok:
+                    salida = "seguir"   # sin cámara no hay nada que calibrar
+                if salida == "salir":
                     break
-                if menu.salida == "nuevo":
+                if salida == "nuevo":
                     juego.nuevo_partido()
-                if menu.salida:
-                    modo = "prueba" if menu.salida == "prueba" else "juego"
+                if salida in ("seguir", "nuevo"):
+                    modo = "juego"
+                elif salida == "probar":
+                    modo = "prueba"
+                elif salida == "calibrar":
+                    modo, cal = "calibrar", Calibracion(intro=False)
+                elif salida == "regrabar":
+                    modo, cal = "calibrar", Calibracion(solo=[menu.regrabar], intro=False)
                 imagen = juego.dibujar(cam, control, ahora)
                 menu.dibujar(imagen, cam, control)
 
@@ -606,7 +631,7 @@ def main():
                     acciones.append(TECLAS[tecla])
 
                 if modo == "menu":
-                    menu = Menu(ajustes)
+                    menu = menu_de()
                     sonar("bell")
                 else:
                     for accion in acciones:
@@ -619,8 +644,14 @@ def main():
                 imagen = juego.dibujar(cam, control, ahora)
 
             if modo != anterior:
-                control.limpiar()
-                flash = None
+                if anterior == "calibrar":
+                    # Durante la calibración el control no corre: se arranca de cero, salvo el
+                    # último gesto grabado, que puede seguir puesto (por ejemplo, los ojos cerrados).
+                    control.reiniciar()
+                    control.bloquear(cal.paso[0])
+                else:
+                    control.limpiar()
+                flash = ojos_desde = None
                 if anterior == "juego":
                     t_pausa = ahora
                 elif modo == "juego" and t_pausa is not None:

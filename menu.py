@@ -11,7 +11,7 @@ from typing import Callable
 from PIL import ImageDraw
 
 from ajustes import ACCIONES, ASIGNABLES, ESPERAS, GESTO_ELEGIR, GESTO_PAUSA, NOMBRE_ACCION, PUNTOS
-from caras import NOMBRE_GESTO
+from caras import GESTOS, NOMBRE_GESTO
 from dibujo import DORADO, H, W, camara_con_gesto, escribir, flecha, fuente
 
 
@@ -32,14 +32,29 @@ class Pantalla:
     refrescar: Callable | None = field(default=None, repr=False)
 
 
-class Menu:
-    """Pila de pantallas. Cuando `salida` deja de ser None, el menú se cierra:
-    "seguir", "prueba" (probar/calibrar gestos), "nuevo" (partido nuevo) o "salir"."""
+BIEN = 0.85   # desde qué acierto un gesto se considera bien reconocido
 
-    def __init__(self, ajustes):
+
+class Menu:
+    """Pila de pantallas. Cuando `salida` deja de ser None, el menú se cierra con:
+    "seguir", "probar" (prueba en vivo), "calibrar" (todo), "regrabar" (el gesto
+    en `self.regrabar`), "nuevo" (partido nuevo) o "salir".
+
+    `clasificador` es una función que devuelve el clasificador actual, para mostrar
+    qué tan bien se reconoce cada gesto. `inicio` elige la primera pantalla: "pausa",
+    "gestos" (Tus gestos) o "calibracion" (la misma, al terminar de calibrar)."""
+
+    def __init__(self, ajustes, clasificador=None, inicio="pausa"):
         self.ajustes = ajustes
-        self.pila = [self.principal()]
+        self.clasificador = clasificador or (lambda: None)
         self.salida = None
+        self.regrabar = None
+        if inicio == "calibracion":
+            self.pila = [self.tus_gestos(titulo="¡Calibración lista!")]
+        elif inicio == "gestos":
+            self.pila = [self.tus_gestos()]
+        else:
+            self.pila = [self.principal()]
 
     # ------------------------------------------------------------ navegación
     def evento(self, ev):
@@ -72,7 +87,7 @@ class Menu:
             Opcion("seguir", "Seguir jugando"),
             Opcion("espera", "Tiempo de gesto", f"{a.espera:.1f} s"),
             Opcion("asignar", "Gestos del juego", "qué gesto hace cada acción"),
-            Opcion("prueba", "Probar / calibrar", "ver si te reconoce bien"),
+            Opcion("gestos", "Tus gestos", "probar, regrabar o calibrar"),
             Opcion("puntos", "Partido a", f"{a.puntos} puntos"),
             Opcion("nuevo", "Nuevo partido"),
             Opcion("salir", "Salir del juego"),
@@ -81,8 +96,10 @@ class Menu:
 
     def _principal(self, id):
         a = self.ajustes
-        if id in ("seguir", "prueba"):
+        if id == "seguir":
             self.salida = id
+        elif id == "gestos":
+            self.abrir(self.tus_gestos())
         elif id == "espera":
             ops = [Opcion(v, f"{v:.1f} s", "más rápido" if v < 0.5 else "más seguro" if v > 0.7 else "")
                    for v in ESPERAS]
@@ -98,6 +115,55 @@ class Menu:
             self.abrir(self.confirmar("¿Empezar un partido nuevo?", "Sí, de nuevo", "nuevo"))
         elif id == "salir":
             self.abrir(self.confirmar("¿Salir del juego?", "Sí, salir", "salir"))
+
+    def tus_gestos(self, i=0, titulo="Tus gestos"):
+        clf = self.clasificador()
+        if clf is None or not clf.calibrado:
+            resumen = "todavía sin calibrar"
+        else:
+            flojos = [g for g in GESTOS if g in clf.faltantes or clf.calidad.get(g, (1.0,))[0] < BIEN]
+            resumen = "todos bien reconocidos" if not flojos else (
+                "1 gesto para mejorar" if len(flojos) == 1 else f"{len(flojos)} gestos para mejorar")
+        ops = [
+            Opcion("jugar", "¡A jugar!"),
+            Opcion("probar", "Probar mis gestos", "ver en vivo qué detecta"),
+            Opcion("regrabar", "Regrabar un gesto", resumen),
+            Opcion("todo", "Calibrar todo de nuevo", "alrededor de un minuto"),
+        ]
+        return Pantalla(titulo, ops, self._tus_gestos, i, f"Tus gestos: {resumen}",
+                        refrescar=lambda k: self.tus_gestos(k, titulo))
+
+    def _tus_gestos(self, id):
+        clf = self.clasificador()
+        if id == "jugar":
+            self.salida = "seguir"
+        elif id == "probar":
+            self.salida = "probar"
+        elif id == "todo" or clf is None or not clf.calibrado:
+            self.salida = "calibrar"
+        else:
+            self.abrir(self.elegir_regrabar(clf))
+
+    def elegir_regrabar(self, clf):
+        def acierto(g):
+            return -1.0 if g in clf.faltantes else clf.calidad.get(g, (1.0,))[0]
+
+        ops = []
+        for g in GESTOS:
+            a, confusion = clf.calidad.get(g, (1.0, None))
+            if g in clf.faltantes:
+                detalle = "sin grabar"
+            elif a < BIEN and confusion:
+                detalle = f"{a:.0%} · se confunde con {NOMBRE_GESTO[confusion].lower()}"
+            else:
+                detalle = f"{a:.0%}"
+            ops.append(Opcion(g, NOMBRE_GESTO[g], detalle))
+
+        def elegir(g):
+            self.regrabar, self.salida = g, "regrabar"
+
+        peor = min(range(len(GESTOS)), key=lambda k: acierto(GESTOS[k]))
+        return Pantalla("Regrabar un gesto", ops, elegir, peor, "Empieza por el que peor te reconoce")
 
     def _espera(self, v):
         self.ajustes.espera = v

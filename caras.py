@@ -255,6 +255,10 @@ PASOS = (
 )
 PREPARAR = 2.0
 MIN_MUESTRAS = 15
+# Para empezar sin manos: todavía no hay calibración, así que se pide un gesto
+# exagerado que se reconoce bien con un umbral simple (la boca bien abierta).
+INICIO_BOCA = 0.4
+INICIO_SEGUNDOS = 1.5
 
 
 def _recortar_ojos(vectores, nombres):
@@ -281,6 +285,7 @@ class Calibracion:
         self.actual, self.giros = [], []
         self.nombres = None
         self.terminada = False
+        self.boca, self.t_intro = 0.0, None   # cuánto lleva la boca bien abierta en la intro
 
     @property
     def paso(self):
@@ -292,12 +297,25 @@ class Calibracion:
         dur = PREPARAR if self.fase == "preparar" else self.paso[2]
         return min(1.0, (ahora - self.t) / dur)
 
+    @property
+    def progreso_inicio(self):
+        return min(1.0, self.boca / INICIO_SEGUNDOS)
+
     def empezar(self):
         if self.fase == "intro":
             self.fase, self.t = "preparar", None
 
     def actualizar(self, lectura, ahora):
-        if self.fase == "intro" or self.terminada:
+        if self.terminada:
+            return
+        if self.fase == "intro":
+            dt = 0.0 if self.t_intro is None else min(ahora - self.t_intro, 0.1)
+            self.t_intro = ahora
+            abierta = bool(lectura and lectura["cara"] and lectura["b"]["jawOpen"] >= INICIO_BOCA)
+            self.boca = self.boca + dt if abierta else max(0.0, self.boca - 2 * dt)
+            if self.boca >= INICIO_SEGUNDOS:
+                sonar("message")
+                self.empezar()
             return
         if self.t is None:
             self.t = ahora
@@ -355,6 +373,11 @@ class Control:
         self.bloqueado, self.libre = None, 0.0
         self.centrado = True
         self.t = None
+
+    def bloquear(self, gesto):
+        """No cuenta `gesto` hasta que se suelte (por ejemplo, si sigue puesto al cambiar de pantalla)."""
+        if gesto and gesto != "neutro":
+            self.bloqueado, self.libre = gesto, 0.0
 
     def limpiar(self):
         """Olvida los gestos a medio cargar (al cambiar de pantalla), pero mantiene el

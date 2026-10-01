@@ -1,6 +1,6 @@
 # Truco con la cara
 
-Un truco argentino que se juega **con gestos de la cara**: levantás las cejas para cantar truco, hacés trompita para el envido, sonreís para decir "quiero" y abrís la boca para tirar la carta. Todo con una webcam común.
+Un truco argentino que se juega **con gestos de la cara**: levantás las cejas para cantar truco, hacés trompita para el envido, sonreís para decir "quiero" y abrís la boca para tirar la carta. Todo con una webcam común, y **se puede usar entero sin manos**: desde la calibración hasta salir del juego.
 
 ![Partida en curso](docs/juego.png)
 
@@ -31,7 +31,9 @@ Si preferís, todo se puede hacer con el teclado: flechas, espacio, `T` truco, `
 
 ### La primera vez: calibración
 
-Cada cara es distinta, así que la primera vez el juego aprende **tus** gestos: te pide cada uno durante unos 2 segundos (alrededor de un minuto en total). Después te muestra qué tan bien distingue cada gesto, y si alguno se confunde con otro lo podés regrabar solo.
+Cada cara es distinta, así que la primera vez el juego aprende **tus** gestos: te pide cada uno durante unos 2 segundos (alrededor de un minuto en total). Para empezar, abrí la boca bien grande hasta llenar la barra.
+
+Al terminar aparece **"¡Calibración lista!"**, donde podés ir a jugar, probar tus gestos en vivo o regrabar alguno (empieza por el que peor te reconoce). Lo mismo está en la pausa, en **"Tus gestos"**. De la prueba en vivo se vuelve cerrando los ojos 2 segundos.
 
 ## Descargar y jugar
 
