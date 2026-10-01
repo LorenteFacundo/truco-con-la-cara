@@ -32,10 +32,11 @@ TECLA_DE = {"jugar": "espacio", "truco": "T", "envido": "E", "real": "R", "falta
 
 
 class Ajustes:
-    def __init__(self, espera=0.5, puntos=30, acciones=None):
+    def __init__(self, espera=0.5, puntos=30, acciones=None, perfil=None):
         self.espera = espera
         self.puntos = puntos
         self.acciones = dict(acciones or POR_DEFECTO)
+        self.perfil = perfil   # id del perfil (calibración) en uso
 
     @classmethod
     def cargar(cls):
@@ -53,11 +54,13 @@ class Ajustes:
                   and len(set(acc.values())) == len(acc))
         if valido:
             a.acciones = acc
+        if isinstance(d.get("perfil"), str):
+            a.perfil = d["perfil"]
         return a
 
     def guardar(self):
-        ARCHIVO.write_text(json.dumps({"espera": self.espera, "puntos": self.puntos,
-                                       "acciones": self.acciones}, ensure_ascii=False, indent=2))
+        ARCHIVO.write_text(json.dumps({"espera": self.espera, "puntos": self.puntos, "acciones": self.acciones,
+                                       "perfil": self.perfil}, ensure_ascii=False, indent=2))
 
     def accion_de(self, gesto):
         """Qué acción hace un gesto en el juego (o None)."""

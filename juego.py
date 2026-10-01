@@ -31,11 +31,11 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from ajustes import GESTO_ELEGIR, GESTO_PAUSA, TECLA_DE, TECLAS, Ajustes
-from caras import (GESTOS, NOMBRE_GESTO, Calibracion, Calibrado, Control, Lector, cargar_clasificador,
-                   guardar_calibracion, sonar)
+from caras import GESTOS, NOMBRE_GESTO, Calibracion, Calibrado, Control, Lector, clasificador_de, sonar
 from dibujo import (DORADO, FONDO_OSCURO, H, W, camara_con_gesto, escribir, flecha, fuente,
                     pegar_camara)
 from menu import Menu
+from perfiles import Perfiles
 from truco import CPU, NOMBRE_ENVIDO, NOMBRE_TRUCO, NOMBRES, VOS, Compu, Mano
 
 PANEL_X = 880
@@ -119,6 +119,7 @@ def fondo():
 class Juego:
     def __init__(self, ajustes):
         self.ajustes = ajustes
+        self.perfil = ""   # nombre del perfil en uso (se muestra en el panel)
         self.compu = Compu()
         self.nuevo_partido()
 
@@ -295,7 +296,8 @@ class Juego:
                 d.rounded_rectangle((x0 + 80, y + 6, x0 + 80 + ancho, y + 22), 6, fill=col)
             escribir(img, (x0 + 345, y), str(self.puntaje[j]), font=fuente(20, True), fill=(240, 240, 240))
         escribir(img, (W - 16, 78), f"a {self.meta}", font=fuente(13), fill=(150, 150, 160), anchor="rt")
-        escribir(img, (x0 + 16, 78), f"Pausa: {NOMBRE_GESTO[GESTO_PAUSA].lower()} o Esc", font=fuente(13),
+        pausa = f"Pausa: {NOMBRE_GESTO[GESTO_PAUSA].lower()} o Esc"
+        escribir(img, (x0 + 16, 78), f"{self.perfil}  ·  {pausa}" if self.perfil else pausa, font=fuente(13),
                  fill=(150, 150, 160))
 
         # cámara
@@ -353,7 +355,12 @@ def dibujar_calibracion(cal, cam, lectura, ahora):
     camx, camy, camw, camh = cx - 320, 160, 640, 480
 
     if cal.fase == "intro":
-        if cal.motivo == "nuevos":
+        if cal.motivo == "otra":
+            titulo = "Calibración para otra persona"
+            lineas = (f"Vamos a crear un perfil nuevo con tus gestos: {len(cal.pasos)} caras de unos 2 segundos.",
+                      "El perfil anterior queda guardado: se puede volver a él desde «Elegir perfil».",
+                      "Hacé cada gesto como lo vas a hacer jugando y mantenelo mientras corre la barra roja.")
+        elif cal.motivo == "nuevos":
             titulo = "Hay gestos nuevos para aprender"
             lineas = ("Ahora podés levantar cada ceja por separado y cerrar los ojos para pausar.",
                       f"Volvemos a calibrar todo: {len(cal.pasos)} caras de unos 2 segundos (alrededor de un minuto).",
@@ -369,8 +376,8 @@ def dibujar_calibracion(cal, cam, lectura, ahora):
         pie = "Con teclado: espacio empieza   ·   S saltea   ·   Q sale"
     else:
         _, instruccion, _ = cal.paso
-        escribir(img, (cx, 18), f"Paso {cal.i + 1} de {len(cal.pasos)}", font=fuente(16), fill=(160, 160, 170),
-                 anchor="mt")
+        paso = f"Paso {cal.i + 1} de {len(cal.pasos)}" + (f"  ·  {cal.etiqueta}" if cal.etiqueta else "")
+        escribir(img, (cx, 18), paso, font=fuente(16), fill=(160, 160, 170), anchor="mt")
         escribir(img, (cx, 46), instruccion, font=fuente(36, True), fill=(255, 255, 255), anchor="mt")
         grabando = cal.fase == "grabar"
         estado = "Grabando: mantené el gesto" if grabando else "Preparate…"
@@ -485,9 +492,13 @@ def diagnostico(camara):
     else:
         cara = "sí" if lectura and lectura["cara"] else "no (¿estás frente a la cámara?)"
         print(f"  cámara {camara}: ok, {cam.shape[1]}x{cam.shape[0]}; cara detectada: {cara}")
-    clf = cargar_clasificador()
+    perfiles, ajustes, control = Perfiles(), Ajustes.cargar(), Control()
+    lista = perfiles.lista()
+    activo = ajustes.perfil if perfiles.existe(ajustes.perfil) else (lista[0]["id"] if lista else None)
+    clf = clasificador_de(perfiles.cargar(activo))
+    if lista:
+        print(f"  perfiles: {', '.join(p['nombre'] for p in lista)} (en uso: {perfiles.nombre(activo)})")
     print(f"  calibración: {'sí' if clf.calibrado else 'todavía no'}")
-    ajustes, control = Ajustes.cargar(), Control()
     juego = Juego(ajustes)
     Menu(ajustes).dibujar(juego.dibujar(cam, control, 0.0), cam, control)
     dibujar_prueba(clf, control, {}, cam, None, 0, 0.0)
@@ -507,10 +518,15 @@ def main():
         return
 
     ajustes = Ajustes.cargar()
+    perfiles = Perfiles()
+    if not perfiles.existe(ajustes.perfil):
+        lista = perfiles.lista()
+        ajustes.perfil = lista[0]["id"] if lista else None
     lector = Lector(args.camara)
-    clf = cargar_clasificador()
+    clf = clasificador_de(perfiles.cargar(ajustes.perfil))
     control = Control(ajustes.espera)
     juego = Juego(ajustes)
+    juego.perfil = perfiles.nombre(ajustes.perfil) if ajustes.perfil else ""
     ventana = "Truco con la cara"
     cv2.namedWindow(ventana, cv2.WINDOW_AUTOSIZE)
 
@@ -519,13 +535,29 @@ def main():
     t_pausa = None
     mostrada = False
 
-    def menu_de(inicio="pausa"):
-        return Menu(ajustes, lambda: clf, inicio)
+    def usar_perfil(id):
+        nonlocal clf
+        clf = clasificador_de(perfiles.cargar(id))
+        ajustes.perfil = id
+        ajustes.guardar()
+        juego.perfil = perfiles.nombre(id)
 
+    def menu_de(inicio="pausa"):
+        return Menu(ajustes, lambda: clf, inicio, perfiles, usar_perfil)
+
+    def calibrar(motivo=None, solo=None, intro=True):
+        """Calibración del perfil en uso, o de un perfil nuevo si es para otra persona (o no hay ninguno)."""
+        nuevo = motivo == "otra" or not ajustes.perfil
+        etiqueta = f"{perfiles.nuevo()[1]} (nuevo)" if nuevo else perfiles.nombre(ajustes.perfil)
+        return Calibracion(solo=solo, intro=intro, motivo=motivo, etiqueta=etiqueta), nuevo
+
+    para_nuevo = False   # si la calibración en curso termina en un perfil nuevo
     if lector.ok and not clf.calibrado:
-        modo, cal = "calibrar", Calibracion()
+        modo = "calibrar"
+        cal, para_nuevo = calibrar()
     elif lector.ok and clf.faltantes:
-        modo, cal = "calibrar", Calibracion(motivo="nuevos")
+        modo = "calibrar"
+        cal, para_nuevo = calibrar(motivo="nuevos")
     else:
         modo = "juego"
     if modo != "juego":
@@ -558,9 +590,13 @@ def main():
                     cal.empezar()
                 cal.actualizar(lectura, ahora)
                 if cal.terminada:
-                    datos = cal.resultado(clf.datos if clf.calibrado else None)
-                    guardar_calibracion(datos)
-                    clf = Calibrado(datos)
+                    if para_nuevo:
+                        id, nombre = perfiles.nuevo()
+                        perfiles.guardar(id, cal.resultado(), nombre)
+                        usar_perfil(id)
+                    else:
+                        datos = perfiles.guardar(ajustes.perfil, cal.resultado(clf.datos if clf.calibrado else None))
+                        clf = Calibrado(datos)
                     modo, menu = "menu", menu_de("calibracion")
                 imagen = dibujar_calibracion(cal, cam, lectura, ahora)
 
@@ -595,7 +631,7 @@ def main():
                     menu.evento("volver")
 
                 salida = menu.salida
-                if salida in ("calibrar", "regrabar") and not lector.ok:
+                if salida in ("calibrar", "regrabar", "otra") and not lector.ok:
                     salida = "seguir"   # sin cámara no hay nada que calibrar
                 if salida == "salir":
                     break
@@ -606,9 +642,14 @@ def main():
                 elif salida == "probar":
                     modo = "prueba"
                 elif salida == "calibrar":
-                    modo, cal = "calibrar", Calibracion(intro=False)
+                    modo = "calibrar"
+                    cal, para_nuevo = calibrar(intro=False)
                 elif salida == "regrabar":
-                    modo, cal = "calibrar", Calibracion(solo=[menu.regrabar], intro=False)
+                    modo = "calibrar"
+                    cal, para_nuevo = calibrar(solo=[menu.regrabar], intro=False)
+                elif salida == "otra":
+                    modo = "calibrar"
+                    cal, para_nuevo = calibrar(motivo="otra")   # con intro: la otra persona arranca abriendo la boca
                 imagen = juego.dibujar(cam, control, ahora)
                 menu.dibujar(imagen, cam, control)
 

@@ -4,7 +4,6 @@ En vez de umbrales fijos, se graba cómo hace cada gesto la persona que juega
 (los 52 "blendshapes" de MediaPipe) y se reconoce con vecinos más cercanos (kNN).
 """
 
-import json
 import shutil
 import subprocess
 import sys
@@ -21,7 +20,7 @@ from mediapipe.tasks.python import vision
 from rutas import dato, recurso
 
 MODELO = recurso("face_landmarker.task")
-ARCHIVO_CALIBRACION = dato("calibracion.json")
+dato("calibracion.json")   # muda la calibración de versiones viejas a la carpeta de datos (ver perfiles.py)
 
 GESTOS = ("sonrisa", "boca", "cejas", "ceja_izq", "ceja_der", "ceño", "beso", "cachetes",
           "guiño_izq", "guiño_der", "ojos")
@@ -222,18 +221,12 @@ class Calibrado:
         return _elegir(votos), {g: votos.get(g, 0.0) for g in GESTOS}
 
 
-def cargar_clasificador():
+def clasificador_de(datos):
+    """El reconocedor para una calibración (la de un perfil), o umbrales fijos si no hay."""
     try:
-        return Calibrado(json.loads(ARCHIVO_CALIBRACION.read_text()))
-    except (OSError, ValueError, KeyError):
+        return Calibrado(datos) if datos else PorUmbrales()
+    except (KeyError, ValueError):
         return PorUmbrales()
-
-
-def guardar_calibracion(datos):
-    """Guarda la calibración; la anterior queda como respaldo en calibracion_anterior.json."""
-    if ARCHIVO_CALIBRACION.exists():
-        shutil.copyfile(ARCHIVO_CALIBRACION, ARCHIVO_CALIBRACION.with_name("calibracion_anterior.json"))
-    ARCHIVO_CALIBRACION.write_text(json.dumps(datos, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------- calibración guiada
@@ -274,7 +267,8 @@ class Calibracion:
     """Va pidiendo cada gesto: unos segundos para prepararse y otros grabando.
     `solo` = lista de gestos a regrabar (None = todo)."""
 
-    def __init__(self, solo=None, intro=True, motivo=None):
+    def __init__(self, solo=None, intro=True, motivo=None, etiqueta=""):
+        self.etiqueta = etiqueta   # para qué perfil es (se muestra en pantalla)
         self.solo = set(solo) if solo else None
         self.pasos = [p for p in PASOS if self.solo is None or p[0] in self.solo]
         self.fase = "intro" if intro else "preparar"

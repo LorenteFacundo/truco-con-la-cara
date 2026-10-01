@@ -33,7 +33,13 @@ Si preferís, todo se puede hacer con el teclado: flechas, espacio, `T` truco, `
 
 Cada cara es distinta, así que la primera vez el juego aprende **tus** gestos: te pide cada uno durante unos 2 segundos (alrededor de un minuto en total). Para empezar, abrí la boca bien grande hasta llenar la barra.
 
-Al terminar aparece **"¡Calibración lista!"**, donde podés ir a jugar, probar tus gestos en vivo o regrabar alguno (empieza por el que peor te reconoce). Lo mismo está en la pausa, en **"Tus gestos"**. De la prueba en vivo se vuelve cerrando los ojos 2 segundos.
+Al terminar aparece **"¡Calibración lista!"**, donde podés ir a jugar, probar tus gestos en vivo o recalibrar alguno (empieza por el que peor te reconoce). Lo mismo está en la pausa, en **"Tus gestos"**. De la prueba en vivo se vuelve cerrando los ojos 2 segundos.
+
+### Perfiles: para mostrárselo a alguien
+
+Cada calibración es un **perfil**. Si querés que otra persona juegue con sus propios gestos: pausa → **Tus gestos** → **Calibrar a otra persona**. Esa persona arranca su calibración abriendo la boca y se crea el "Perfil 2" (los nombres son automáticos, porque sin manos no se puede escribir). Con **Elegir perfil** se vuelve al tuyo o se borra el que ya no se use. El juego recuerda el último perfil usado.
+
+Para manejar el menú, con la calibración de cualquiera suele andar bien (girar la cabeza, levantar las cejas y cerrar los ojos son gestos fáciles de reconocer); el perfil propio hace falta para el ajuste fino de la partida.
 
 ## Descargar y jugar
 
@@ -76,7 +82,7 @@ Probado en Fedora 44 con Python 3.14 y una Logitech Brio 100.
 
 ## Privacidad
 
-Todo corre en tu compu: la imagen de la cámara no se guarda ni se manda a ningún lado. La calibración guarda solo los números de los gestos (no imágenes) en `~/.config/truco-con-la-cara/`.
+Todo corre en tu compu: la imagen de la cámara no se guarda ni se manda a ningún lado. Los perfiles guardan solo los números de los gestos (no imágenes) en `~/.config/truco-con-la-cara/perfiles/` (en Windows, `%APPDATA%\truco-con-la-cara\perfiles\`).
 
 ## Archivos
 
@@ -86,7 +92,8 @@ Todo corre en tu compu: la imagen de la cámara no se guarda ni se manda a ning�
 | `truco.py` | Reglas del truco y la compu |
 | `caras.py` | Cámara, reconocimiento de gestos, calibración y control |
 | `menu.py` | Menú de pausa manejado con la cara |
-| `ajustes.py` | Ajustes guardados (tiempo, puntos, gesto de cada acción) |
+| `ajustes.py` | Ajustes guardados (tiempo, puntos, gesto de cada acción, perfil en uso) |
+| `perfiles.py` | Perfiles: una calibración por persona |
 | `dibujo.py`, `rutas.py` | Utilidades de dibujo y de rutas de archivos |
 | `build.py` | Arma el ejecutable con PyInstaller |
 | `gestos.py` | Demo suelta: muestra en vivo qué gestos detecta |

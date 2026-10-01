@@ -12,6 +12,7 @@ from PIL import ImageDraw
 
 from ajustes import ACCIONES, ASIGNABLES, ESPERAS, GESTO_ELEGIR, GESTO_PAUSA, NOMBRE_ACCION, PUNTOS
 from caras import GESTOS, NOMBRE_GESTO
+from perfiles import fecha_corta
 from dibujo import DORADO, H, W, camara_con_gesto, escribir, flecha, fuente
 
 
@@ -37,16 +38,20 @@ BIEN = 0.85   # desde qué acierto un gesto se considera bien reconocido
 
 class Menu:
     """Pila de pantallas. Cuando `salida` deja de ser None, el menú se cierra con:
-    "seguir", "probar" (prueba en vivo), "calibrar" (todo), "regrabar" (el gesto
-    en `self.regrabar`), "nuevo" (partido nuevo) o "salir".
+    "seguir", "probar" (prueba en vivo), "calibrar" (todo el perfil en uso), "regrabar"
+    (el gesto en `self.regrabar`), "otra" (calibrar a otra persona en un perfil nuevo),
+    "nuevo" (partido nuevo) o "salir".
 
     `clasificador` es una función que devuelve el clasificador actual, para mostrar
-    qué tan bien se reconoce cada gesto. `inicio` elige la primera pantalla: "pausa",
-    "gestos" (Tus gestos) o "calibracion" (la misma, al terminar de calibrar)."""
+    qué tan bien se reconoce cada gesto. `perfiles` (Perfiles) y `usar_perfil(id)`
+    permiten cambiar de perfil sin salir del menú. `inicio` elige la primera pantalla:
+    "pausa", "gestos" (Tus gestos) o "calibracion" (la misma, al terminar de calibrar)."""
 
-    def __init__(self, ajustes, clasificador=None, inicio="pausa"):
+    def __init__(self, ajustes, clasificador=None, inicio="pausa", perfiles=None, usar_perfil=None):
         self.ajustes = ajustes
         self.clasificador = clasificador or (lambda: None)
+        self.perfiles = perfiles
+        self.usar_perfil = usar_perfil
         self.salida = None
         self.regrabar = None
         if inicio == "calibracion":
@@ -75,7 +80,9 @@ class Menu:
         self.pila.pop()
         p = self.pila[-1]
         if p.refrescar:
-            self.pila[-1] = p.refrescar(p.i)
+            nueva = p.refrescar(p.i)
+            nueva.i = min(nueva.i, len(nueva.opciones) - 1)   # la lista puede haber quedado más corta
+            self.pila[-1] = nueva
 
     def abrir(self, pantalla):
         self.pila.append(pantalla)
@@ -87,7 +94,7 @@ class Menu:
             Opcion("seguir", "Seguir jugando"),
             Opcion("espera", "Tiempo de gesto", f"{a.espera:.1f} s"),
             Opcion("asignar", "Gestos del juego", "qué gesto hace cada acción"),
-            Opcion("gestos", "Tus gestos", "probar, regrabar o calibrar"),
+            Opcion("gestos", "Tus gestos", "calibrar, probar y perfiles"),
             Opcion("puntos", "Partido a", f"{a.puntos} puntos"),
             Opcion("nuevo", "Nuevo partido"),
             Opcion("salir", "Salir del juego"),
@@ -127,22 +134,69 @@ class Menu:
         ops = [
             Opcion("jugar", "¡A jugar!"),
             Opcion("probar", "Probar mis gestos", "ver en vivo qué detecta"),
-            Opcion("regrabar", "Regrabar un gesto", resumen),
-            Opcion("todo", "Calibrar todo de nuevo", "alrededor de un minuto"),
+            Opcion("regrabar", "Calibrar un gesto", resumen),
+            Opcion("todo", "Calibrar por completo", "alrededor de un minuto"),
+            Opcion("otra", "Calibrar a otra persona", "crea un perfil nuevo"),
         ]
-        return Pantalla(titulo, ops, self._tus_gestos, i, f"Tus gestos: {resumen}",
-                        refrescar=lambda k: self.tus_gestos(k, titulo))
+        nota = f"Tus gestos: {resumen}"
+        if self.perfiles:
+            cuantos = len(self.perfiles.lista())
+            en_uso = self.perfiles.nombre(self.ajustes.perfil)
+            ops.append(Opcion("perfiles", "Elegir perfil",
+                              f"en uso: {en_uso} · {cuantos} guardado{'s' if cuantos != 1 else ''}"))
+            nota = f"{en_uso}: {resumen}"
+        return Pantalla(titulo, ops, self._tus_gestos, i, nota, refrescar=lambda k: self.tus_gestos(k, titulo))
 
     def _tus_gestos(self, id):
         clf = self.clasificador()
         if id == "jugar":
             self.salida = "seguir"
-        elif id == "probar":
-            self.salida = "probar"
+        elif id in ("probar", "otra"):
+            self.salida = id
+        elif id == "perfiles":
+            self.abrir(self.elegir_perfil())
         elif id == "todo" or clf is None or not clf.calibrado:
             self.salida = "calibrar"
         else:
             self.abrir(self.elegir_regrabar(clf))
+
+    def elegir_perfil(self, i=None):
+        perfiles = self.perfiles.lista()
+        ops = [Opcion(p["id"], p["nombre"],
+                      ("en uso · " if p["id"] == self.ajustes.perfil else "") + f"creado {fecha_corta(p['creado'])}")
+               for p in perfiles]
+        if len(perfiles) > 1:
+            ops.append(Opcion("borrar", "Borrar un perfil", "el que ya no se use"))
+        if i is None:
+            i = next((k for k, p in enumerate(perfiles) if p["id"] == self.ajustes.perfil), 0)
+
+        def elegir(id):
+            if id == "borrar":
+                self.abrir(self.elegir_borrar())
+                return
+            if id != self.ajustes.perfil:
+                self.usar_perfil(id)
+            self.volver()
+
+        return Pantalla("Elegir perfil", ops, elegir, i, "Cada perfil es la calibración de una persona",
+                        refrescar=self.elegir_perfil)
+
+    def elegir_borrar(self):
+        ops = [Opcion(p["id"], p["nombre"], f"creado {fecha_corta(p['creado'])}")
+               for p in self.perfiles.lista() if p["id"] != self.ajustes.perfil]
+
+        def elegir(id):
+            def confirmar(ok):
+                if ok:
+                    self.perfiles.borrar(id)
+                    self.pila.pop()   # saca esta confirmación; volver() saca la lista y refresca «Elegir perfil»
+                self.volver()
+
+            nombre = self.perfiles.nombre(id)
+            self.abrir(Pantalla(f"¿Borrar {nombre}?", [Opcion(False, "No, volver"), Opcion(True, "Sí, borrarlo")],
+                                confirmar))
+
+        return Pantalla("Borrar un perfil", ops, elegir, 0, "El perfil en uso no se puede borrar")
 
     def elegir_regrabar(self, clf):
         def acierto(g):
@@ -163,7 +217,7 @@ class Menu:
             self.regrabar, self.salida = g, "regrabar"
 
         peor = min(range(len(GESTOS)), key=lambda k: acierto(GESTOS[k]))
-        return Pantalla("Regrabar un gesto", ops, elegir, peor, "Empieza por el que peor te reconoce")
+        return Pantalla("Calibrar un gesto", ops, elegir, peor, "Empieza por el que peor te reconoce")
 
     def _espera(self, v):
         self.ajustes.espera = v
