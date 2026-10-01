@@ -1,0 +1,90 @@
+# Truco con la cara
+
+Un truco argentino que se juega **con gestos de la cara**: levantás las cejas para cantar truco, hacés trompita para el envido, sonreís para decir "quiero" y abrís la boca para tirar la carta. Todo con una webcam común.
+
+![Partida en curso](docs/juego.png)
+
+## Cómo se juega
+
+Es un truco 1 contra 1 contra la compu, a 15 o 30 puntos, sin flor. Para que un gesto cuente hay que sostenerlo medio segundo (se puede cambiar), y una barrita muestra cuánto falta.
+
+| Gesto | Acción (por defecto) |
+|---|---|
+| Girar la cabeza a izquierda o derecha | Elegir carta |
+| Abrir la boca | Tirar la carta elegida |
+| Levantar las cejas | Truco / Retruco / Vale cuatro |
+| Trompita (beso) | Envido |
+| Guiño izquierdo | Real envido |
+| Guiño derecho | Falta envido |
+| Sonreír | Quiero |
+| Fruncir el ceño | No quiero |
+| Inflar los cachetes | Irse al mazo |
+| Cerrar los ojos | Menú de pausa |
+
+También están **levantar solo la ceja izquierda** y **solo la derecha**, para asignarlas a lo que quieras. El panel de la derecha muestra en cada momento solo lo que podés hacer.
+
+**Menú de pausa** (se abre cerrando los ojos): girás la cabeza para moverte, levantás las cejas para elegir y volvés cerrando los ojos. Ahí podés cambiar el tiempo de gesto, qué gesto hace cada acción y el largo del partido, o recalibrar.
+
+![Menú de pausa](docs/menu.png)
+
+Si preferís, todo se puede hacer con el teclado: flechas, espacio, `T` truco, `E` envido, `R` real envido, `F` falta envido, `S` quiero, `N` no quiero, `M` mazo, `Esc` pausa, `Q` salir.
+
+### La primera vez: calibración
+
+Cada cara es distinta, así que la primera vez el juego aprende **tus** gestos: te pide cada uno durante unos 2 segundos (alrededor de un minuto en total). Después te muestra qué tan bien distingue cada gesto, y si alguno se confunde con otro lo podés regrabar solo.
+
+## Descargar y jugar (Linux)
+
+1. Bajá `truco-con-la-cara-linux-x86_64.tar.gz` desde [Releases](../../releases/latest).
+2. Descomprimilo y ejecutá:
+   ```bash
+   tar -xzf truco-con-la-cara-linux-x86_64.tar.gz
+   ./truco-con-la-cara/truco-con-la-cara
+   ```
+
+La primera vez tarda unos segundos en abrir. Si algo no anda, `./truco-con-la-cara/truco-con-la-cara --diagnostico` revisa la cámara, el modelo y las fuentes sin abrir el juego. Si tenés más de una cámara: `--camara 1`.
+
+## Correrlo desde el código
+
+```bash
+git clone <este repo>
+cd truco-con-la-cara
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python juego.py
+```
+
+Para armar el ejecutable: `./build.sh` (deja el paquete en `dist/`).
+
+Probado en Fedora 44 con Python 3.14 y una Logitech Brio 100.
+
+## Cómo funciona
+
+- **Detección de la cara:** [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker) da, en cada cuadro, 52 valores ("blendshapes") que dicen cuánto está haciendo la cara cada movimiento: sonrisa, mandíbula abierta, cejas, ojos…
+- **Reconocimiento personalizado:** en vez de umbrales fijos (que andaban mal: un guiño también te sube las cejas, al inflar los cachetes se te frunce la boca), el juego graba tus gestos y los reconoce con *k* vecinos más cercanos sobre esos valores. No usa hacia dónde mirás, porque eso cambia cuando recorrés la pantalla con la vista.
+- **Filtro en el tiempo:** un gesto se dispara si estuvo presente al menos ~2/3 del tiempo de espera. Así tolera algún cuadro perdido, pero no se dispara por gestos sueltos mientras hablás o te reís.
+- **Girar la cabeza:** se mide dónde queda la nariz respecto del centro de la cara.
+- **La compu:** para decidir si canta truco o quiere, simula cientos de manos posibles con las cartas que no vio (Monte Carlo). A veces miente con el envido.
+- **Reglas:** envido, real envido y falta envido; truco, retruco y vale cuatro; "el envido está primero"; pardas como en el truco de verdad.
+
+## Privacidad
+
+Todo corre en tu compu: la imagen de la cámara no se guarda ni se manda a ningún lado. La calibración guarda solo los números de los gestos (no imágenes) en `~/.config/truco-con-la-cara/`.
+
+## Archivos
+
+| Archivo | Qué hace |
+|---|---|
+| `juego.py` | Programa principal: mesa, pantallas y bucle del juego |
+| `truco.py` | Reglas del truco y la compu |
+| `caras.py` | Cámara, reconocimiento de gestos, calibración y control |
+| `menu.py` | Menú de pausa manejado con la cara |
+| `ajustes.py` | Ajustes guardados (tiempo, puntos, gesto de cada acción) |
+| `dibujo.py`, `rutas.py` | Utilidades de dibujo y de rutas de archivos |
+| `gestos.py` | Demo suelta: muestra en vivo qué gestos detecta |
+
+## Créditos y licencias
+
+- Código: [MIT](LICENSE), por Facundo Lorente.
+- Modelo `face_landmarker.task`: [MediaPipe](https://github.com/google-ai-edge/mediapipe) de Google, licencia Apache 2.0.
+- Fuente Noto Sans: licencia [SIL Open Font License 1.1](fuentes/OFL.txt).

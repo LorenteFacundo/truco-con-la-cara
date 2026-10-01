@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+build/
+dist/
+*.spec
+
+# Datos personales del jugador (por si quedó alguno de versiones viejas al lado del código)
+calibracion*.json
+ajustes.json
