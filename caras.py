@@ -56,7 +56,13 @@ class Lector:
     """Lee la webcam y devuelve los blendshapes de la cara y el giro de la cabeza."""
 
     def __init__(self, camara=0):
-        self.cap = cv2.VideoCapture(camara, cv2.CAP_V4L2 if sys.platform.startswith("linux") else cv2.CAP_ANY)
+        if sys.platform.startswith("linux"):
+            backend = cv2.CAP_V4L2
+        elif sys.platform == "win32":
+            backend = cv2.CAP_DSHOW   # abre mucho más rápido que el predeterminado en Windows
+        else:
+            backend = cv2.CAP_ANY
+        self.cap = cv2.VideoCapture(camara, backend)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.ok = self.cap.isOpened()

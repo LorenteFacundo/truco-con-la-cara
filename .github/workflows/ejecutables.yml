@@ -1,0 +1,82 @@
+name: Ejecutables
+
+# Arma el juego para Linux y Windows. Al subir un tag v* (por ejemplo v1.0.0)
+# además publica una versión en Releases con los dos paquetes.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  armar:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Ubuntu 22.04 (y no la última) para que el ejecutable de Linux ande también en distros más viejas.
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Armar el ejecutable
+        run: python build.py
+
+      - name: Probar el ejecutable
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            dist/truco-con-la-cara/truco-con-la-cara.exe --diagnostico
+          else
+            dist/truco-con-la-cara/truco-con-la-cara --diagnostico
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paquete-${{ matrix.os }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  publicar:
+    needs: armar
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: paquetes
+          merge-multiple: true
+
+      - name: Crear la versión
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notas.md <<'NOTAS'
+          Truco argentino que se juega con gestos de la cara. Solo necesitás una webcam.
+
+          **Windows:** bajá `truco-con-la-cara-windows-x64.zip`, descomprimilo y abrí `truco-con-la-cara.exe` adentro de la carpeta.
+          Como el ejecutable no está firmado, Windows puede mostrar "Windows protegió su PC": tocá **Más información → Ejecutar de todas formas**.
+
+          **Linux:** bajá `truco-con-la-cara-linux-x86_64.tar.gz` y ejecutá:
+          ```
+          tar -xzf truco-con-la-cara-linux-x86_64.tar.gz
+          ./truco-con-la-cara/truco-con-la-cara
+          ```
+
+          La primera vez tarda unos segundos en abrir y te pide calibrar tus gestos (alrededor de un minuto).
+          NOTAS
+          gh release create "$GITHUB_REF_NAME" paquetes/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Truco con la cara $GITHUB_REF_NAME" \
+            --notes-file notas.md

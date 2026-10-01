@@ -449,7 +449,11 @@ def dibujar_prueba(clf, control, puntajes, cam, flash, sel, ahora):
     return img
 
 
-IZQ, DER, ARRIBA, ABAJO = (65361, 81, ord("a")), (65363, 83, ord("d")), (65362, 82), (65364, 84)
+# Códigos de las flechas: Linux (GTK/Qt) y Windows.
+IZQ = (65361, 81, 2424832, ord("a"))
+DER = (65363, 83, 2555904, ord("d"))
+ARRIBA = (65362, 82, 2490368)
+ABAJO = (65364, 84, 2621440)
 
 
 def diagnostico(camara):

@@ -33,16 +33,19 @@ Si preferís, todo se puede hacer con el teclado: flechas, espacio, `T` truco, `
 
 Cada cara es distinta, así que la primera vez el juego aprende **tus** gestos: te pide cada uno durante unos 2 segundos (alrededor de un minuto en total). Después te muestra qué tan bien distingue cada gesto, y si alguno se confunde con otro lo podés regrabar solo.
 
-## Descargar y jugar (Linux)
+## Descargar y jugar
 
-1. Bajá `truco-con-la-cara-linux-x86_64.tar.gz` desde [Releases](../../releases/latest).
-2. Descomprimilo y ejecutá:
-   ```bash
-   tar -xzf truco-con-la-cara-linux-x86_64.tar.gz
-   ./truco-con-la-cara/truco-con-la-cara
-   ```
+Bajá el paquete de tu sistema desde [Releases](../../releases/latest).
 
-La primera vez tarda unos segundos en abrir. Si algo no anda, `./truco-con-la-cara/truco-con-la-cara --diagnostico` revisa la cámara, el modelo y las fuentes sin abrir el juego. Si tenés más de una cámara: `--camara 1`.
+**Windows:** descomprimí `truco-con-la-cara-windows-x64.zip` y abrí `truco-con-la-cara.exe` adentro de la carpeta. Como el ejecutable no está firmado, Windows puede mostrar "Windows protegió su PC": tocá **Más información → Ejecutar de todas formas**.
+
+**Linux:**
+```bash
+tar -xzf truco-con-la-cara-linux-x86_64.tar.gz
+./truco-con-la-cara/truco-con-la-cara
+```
+
+La primera vez tarda unos segundos en abrir. Si algo no anda, correlo con `--diagnostico`: revisa la cámara, el modelo y las fuentes sin abrir el juego. Si tenés más de una cámara, elegí otra con `--camara 1`.
 
 ## Correrlo desde el código
 
@@ -54,7 +57,7 @@ python3 -m venv .venv
 .venv/bin/python juego.py
 ```
 
-Para armar el ejecutable: `./build.sh` (deja el paquete en `dist/`).
+Para armar el ejecutable: `.venv/bin/pip install pyinstaller` y `.venv/bin/python build.py` (deja el paquete en `dist/`). Los ejecutables de cada versión los arma GitHub Actions para Linux y Windows (`.github/workflows/ejecutables.yml`).
 
 Probado en Fedora 44 con Python 3.14 y una Logitech Brio 100.
 
@@ -81,6 +84,7 @@ Todo corre en tu compu: la imagen de la cámara no se guarda ni se manda a ning�
 | `menu.py` | Menú de pausa manejado con la cara |
 | `ajustes.py` | Ajustes guardados (tiempo, puntos, gesto de cada acción) |
 | `dibujo.py`, `rutas.py` | Utilidades de dibujo y de rutas de archivos |
+| `build.py` | Arma el ejecutable con PyInstaller |
 | `gestos.py` | Demo suelta: muestra en vivo qué gestos detecta |
 
 ## Créditos y licencias
